@@ -12,7 +12,7 @@ blueprint:
     Perfetto per illuminazione esterna intelligente e risparmio energetico.
   
   domain: automation
-  author: Il Tuo Nome
+  author: Matte1240
   homeassistant:
     min_version: 2023.4.0
   
