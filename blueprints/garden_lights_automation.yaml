@@ -19,11 +19,11 @@ blueprint:
 
     frigate_person_sensor:
       name: 🚶 Sensore Persona Frigate (opzionale)
-      description: "Sensore binario di Frigate che rileva una persona (es. binary_sensor.camera_person_motion). Lascia vuoto se non disponibile."
+      description: "Sensore di Frigate che rileva una persona. È consigliato usare il sensore '_person_occupancy' (es. binary_sensor.giardino_cam_person_occupancy). Lascia vuoto se non disponibile."
       default: null
       selector:
-        entity:
-          domain: binary_sensor
+        # Selettore generico per massima compatibilità
+        entity: {}
 
     sun_elevation:
       name: 🌅 Elevazione Sole per Accensione
