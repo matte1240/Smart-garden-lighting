@@ -1,5 +1,5 @@
 blueprint:
-  name: 🌅 Luci Giardino Intelligenti (migliorato)
+  name: 🌅 Luci Giardino Intelligenti (corretto)
   description: >
     Blueprint migliorato per la gestione automatica delle luci del giardino.
     Optional motion sensor, controllo per giorni lavorativi, boost meteo e
@@ -137,7 +137,6 @@ condition:
 
 action:
   - choose:
-
       # TRAMONTO: accendi con luminosità base
       - conditions:
           - condition: trigger
@@ -163,8 +162,6 @@ action:
             entity_id: sun.sun
             attribute: elevation
             below: !input sun_elevation
-          - condition: template
-            value_template: "{{ should_run }}"
         sequence:
           - service: light.turn_on
             target: !input garden_lights
@@ -174,7 +171,7 @@ action:
           - service: logbook.log
             data:
               name: "🚶 Movimento"
-              message: "Luminosità aumentata a {{ motion_brightness }}%"
+              message: "Luminosità aumentata a {{ !input motion_brightness }}%"
 
       # FINE MOVIMENTO: ritorna a base (solo se sensore configurato)
       - conditions:
@@ -186,8 +183,6 @@ action:
             entity_id: sun.sun
             attribute: elevation
             below: !input sun_elevation
-          - condition: template
-            value_template: "{{ should_run }}"
         sequence:
           - service: light.turn_on
             target: !input garden_lights
@@ -221,8 +216,6 @@ action:
             entity_id: sun.sun
             attribute: elevation
             below: !input sun_elevation
-          - condition: template
-            value_template: "{{ should_run }}"
         sequence:
           - service: light.turn_on
             target: !input garden_lights
@@ -233,21 +226,8 @@ action:
             data:
               name: "🌅 Controllo Mattutino"
               message: "Luci riaccese alle 06:00 — ancora buio ({{ final_base_brightness }}%)"
-
-  # default: nessuna azione principale; utile per debug leggero
-  default:
-    - choose:
-        - conditions:
-            - condition: template
-              value_template: "{{ not should_run }}"
-          sequence:
-            - service: logbook.log
-              data:
-                name: "🔕 Luci Giardino"
-                message: "Automazione disattiva per opzione giorni lavorativi"
-    - service: persistent_notification.create
-      data:
-        title: "Luci Giardino"
-        message: "Trigger ricevuto ma nessuna azione eseguita (controlla condizioni)"
+    # Se nessun trigger corrisponde, non viene eseguita nessuna azione.
+    # Questo è il comportamento atteso.
+    default: []
 
 mode: restart
