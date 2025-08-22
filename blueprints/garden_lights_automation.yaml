@@ -1,9 +1,8 @@
 blueprint:
-  name: 🌅 Luci Giardino Intelligenti (ottimizzato)
+  name: 🌅 Luci Giardino Intelligenti (con Frigate)
   description: >
-    Blueprint migliorato per la gestione automatica delle luci del giardino.
-    Optional motion sensor, controllo per giorni lavorativi, boost meteo e
-    transizioni morbide.
+    Blueprint per la gestione delle luci del giardino, ottimizzato per sensori di presenza persona di Frigate.
+    Include controllo per giorni lavorativi, boost meteo e transizioni morbide.
   domain: automation
   author: Matte1240
   homeassistant:
@@ -12,24 +11,23 @@ blueprint:
   input:
     garden_lights:
       name: 🔆 Luci del Giardino
-      description: Seleziona le luci del giardino da controllare automaticamente
+      description: Seleziona le luci del giardino da controllare automaticamente.
       selector:
         target:
           entity:
             domain: light
 
-    motion_sensor:
-      name: 🚶 Sensore di Movimento (opzionale)
-      description: Sensore PIR o di movimento. Lascia vuoto se non disponibile.
+    frigate_person_sensor:
+      name: 🚶 Sensore Persona Frigate (opzionale)
+      description: "Sensore binario di Frigate che rileva una persona (es. binary_sensor.camera_person_motion). Lascia vuoto se non disponibile."
       default: null
       selector:
         entity:
           domain: binary_sensor
-          device_class: motion
 
     sun_elevation:
       name: 🌅 Elevazione Sole per Accensione
-      description: Gradi sotto l'orizzonte per accensione automatica (-6 = tramonto civile)
+      description: Gradi sotto l'orizzonte per accensione automatica (-6 = tramonto civile).
       default: -6
       selector:
         number:
@@ -48,8 +46,8 @@ blueprint:
           step: 5
           unit_of_measurement: "%"
 
-    motion_brightness:
-      name: 🔆 Luminosità con Movimento (%)
+    person_brightness:
+      name: 🔆 Luminosità con Persona Rilevata (%)
       default: 80
       selector:
         number:
@@ -58,8 +56,9 @@ blueprint:
           step: 5
           unit_of_measurement: "%"
 
-    motion_duration:
-      name: ⏱️ Durata Luminosità Alta
+    person_timeout:
+      name: ⏱️ Timeout Assenza Persona
+      description: Tempo di attesa dopo che la persona non è più rilevata prima di tornare alla luminosità base.
       default:
         minutes: 5
       selector:
@@ -80,14 +79,14 @@ blueprint:
 
     enable_weather_boost:
       name: 🌧️ Aumento per Maltempo
-      description: Aumenta luminosità base quando c'è maltempo (+20%)
+      description: Aumenta luminosità base quando c'è maltempo (+20%).
       default: false
       selector:
         boolean: {}
 
 variables:
-  motion_entity: !input motion_sensor
-  has_motion_sensor: "{{ motion_entity not in [none, '', 'unknown'] }}"
+  person_entity: !input frigate_person_sensor
+  has_person_sensor: "{{ person_entity not in [none, '', 'unknown'] }}"
   weekday_only: !input weekday_only
   is_weekday: "{{ now().weekday() < 5 }}"
   should_run: "{{ not weekday_only or is_weekday }}"
@@ -109,15 +108,15 @@ trigger:
     below: !input sun_elevation
     id: sunset_trigger
 
-  # Trigger di movimento basato su template per gestire il sensore opzionale
+  # Trigger di presenza persona basato su template per gestire il sensore opzionale
   - platform: template
-    value_template: "{{ has_motion_sensor and is_state(motion_entity, 'on') }}"
-    id: motion_on_trigger
+    value_template: "{{ has_person_sensor and is_state(person_entity, 'on') }}"
+    id: person_on_trigger
 
   - platform: template
-    value_template: "{{ has_motion_sensor and is_state(motion_entity, 'off') }}"
-    for: !input motion_duration
-    id: motion_off_trigger
+    value_template: "{{ has_person_sensor and is_state(person_entity, 'off') }}"
+    for: !input person_timeout
+    id: person_off_trigger
 
   - platform: time
     at: !input night_off_time
@@ -154,11 +153,11 @@ action:
               name: "🌅 Luci Giardino"
               message: "Accese ({{ trigger.id }}) — Luminosità: {{ final_base_brightness }}%"
 
-      # MOVIMENTO RILEVATO
+      # PERSONA RILEVATA
       - conditions:
           - condition: trigger
-            id: motion_on_trigger
-          - condition: numeric_state # Controllo ridondante ma sicuro
+            id: person_on_trigger
+          - condition: numeric_state
             entity_id: sun.sun
             attribute: elevation
             below: !input sun_elevation
@@ -166,17 +165,17 @@ action:
           - service: light.turn_on
             target: !input garden_lights
             data:
-              brightness_pct: !input motion_brightness
+              brightness_pct: !input person_brightness
               transition: 2
           - service: logbook.log
             data:
-              name: "🚶 Movimento"
-              message: "Luminosità aumentata a {{ !input motion_brightness }}%"
+              name: "🚶 Persona Rilevata"
+              message: "Luminosità aumentata a {{ !input person_brightness }}%"
 
-      # FINE MOVIMENTO
+      # FINE PRESENZA PERSONA
       - conditions:
           - condition: trigger
-            id: motion_off_trigger
+            id: person_off_trigger
           - condition: numeric_state
             entity_id: sun.sun
             attribute: elevation
@@ -189,7 +188,7 @@ action:
               transition: 10
           - service: logbook.log
             data:
-              name: "⏱️ Movimento Terminato"
+              name: "⏱️ Persona non più rilevata"
               message: "Ripristinata luminosità a {{ final_base_brightness }}%"
 
       # SPEGNIMENTO NOTTURNO
