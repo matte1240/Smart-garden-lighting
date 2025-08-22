@@ -1,8 +1,8 @@
 blueprint:
-  name: 🌅 Luci Giardino Intelligenti (con Frigate)
+  name: 🌅 Luci Giardino Intelligenti (con Frigate e controllo spegnimento)
   description: >
     Blueprint per la gestione delle luci del giardino, ottimizzato per sensori di presenza persona di Frigate.
-    Include controllo per giorni lavorativi, boost meteo e transizioni morbide.
+    Include controllo per giorni lavorativi, boost meteo e opzioni avanzate di spegnimento.
   domain: automation
   author: Matte1240
   homeassistant:
@@ -22,7 +22,6 @@ blueprint:
       description: "Sensore di Frigate che rileva una persona. È consigliato usare il sensore '_person_occupancy' (es. binary_sensor.giardino_cam_person_occupancy). Lascia vuoto se non disponibile."
       default: null
       selector:
-        # Selettore generico per massima compatibilità
         entity: {}
 
     sun_elevation:
@@ -65,11 +64,33 @@ blueprint:
         duration:
           enable_day: false
 
+    enable_night_off:
+      name: 🌙 Abilita Spegnimento Notturno Programmato
+      description: Se attivo, le luci si spegneranno all'orario specificato sotto.
+      default: true
+      selector:
+        boolean: {}
+
     night_off_time:
-      name: 🌙 Orario Spegnimento Notturno
+      name: ⏰ Orario Spegnimento Notturno
+      description: Orario in cui spegnere le luci (se l'opzione sopra è attiva).
       default: "23:30:00"
       selector:
         time: {}
+
+    enable_sunrise_off:
+      name: 🌅 Abilita Spegnimento all'Alba
+      description: Se attivo, le luci si spegneranno all'alba (con l'offset specificato sotto).
+      default: true
+      selector:
+        boolean: {}
+
+    sunrise_offset:
+      name: ⏱️ Offset Spegnimento Alba
+      description: "Quanto tempo prima (-) o dopo (+) l'alba spegnere le luci."
+      default: "00:15:00"
+      selector:
+        duration: {}
 
     weekday_only:
       name: 📅 Solo Giorni Feriali
@@ -100,6 +121,8 @@ variables:
     {% else %}
       {{ b }}
     {% endif %}
+  enable_night_off: !input enable_night_off
+  enable_sunrise_off: !input enable_sunrise_off
 
 trigger:
   - platform: numeric_state
@@ -108,7 +131,6 @@ trigger:
     below: !input sun_elevation
     id: sunset_trigger
 
-  # Trigger di presenza persona basato su template per gestire il sensore opzionale
   - platform: template
     value_template: "{{ has_person_sensor and is_state(person_entity, 'on') }}"
     id: person_on_trigger
@@ -118,9 +140,20 @@ trigger:
     for: !input person_timeout
     id: person_off_trigger
 
+  - platform: template
+    value_template: "{{ enable_night_off }}"
+    id: night_off_check # Dummy trigger to enable the time trigger below
   - platform: time
     at: !input night_off_time
     id: night_off_trigger
+
+  - platform: template
+    value_template: "{{ enable_sunrise_off }}"
+    id: sunrise_off_check # Dummy trigger to enable the sun trigger below
+  - platform: sun
+    event: sunrise
+    offset: !input sunrise_offset
+    id: sunrise_off_trigger
 
   - platform: time
     at: "06:00:00"
@@ -195,6 +228,8 @@ action:
       - conditions:
           - condition: trigger
             id: night_off_trigger
+          - condition: template
+            value_template: "{{ enable_night_off }}"
         sequence:
           - service: light.turn_off
             target: !input garden_lights
@@ -204,6 +239,23 @@ action:
             data:
               name: "🌙 Spegnimento Notturno"
               message: "Luci spente come da programma ({{ !input night_off_time }})"
+
+      # SPEGNIMENTO ALL'ALBA
+      - conditions:
+          - condition: trigger
+            id: sunrise_off_trigger
+          - condition: template
+            value_template: "{{ enable_sunrise_off }}"
+        sequence:
+          - service: light.turn_off
+            target: !input garden_lights
+            data:
+              transition: 30
+          - service: logbook.log
+            data:
+              name: "🌅 Spegnimento Alba"
+              message: "Luci spente all'alba."
+
     default: []
 
 mode: restart
