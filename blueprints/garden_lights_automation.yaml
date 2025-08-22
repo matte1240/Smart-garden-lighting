@@ -140,16 +140,10 @@ trigger:
     for: !input person_timeout
     id: person_off_trigger
 
-  - platform: template
-    value_template: "{{ enable_night_off }}"
-    id: night_off_check # Dummy trigger to enable the time trigger below
   - platform: time
     at: !input night_off_time
     id: night_off_trigger
 
-  - platform: template
-    value_template: "{{ enable_sunrise_off }}"
-    id: sunrise_off_check # Dummy trigger to enable the sun trigger below
   - platform: sun
     event: sunrise
     offset: !input sunrise_offset
