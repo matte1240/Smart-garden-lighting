@@ -64,8 +64,11 @@ blueprint:
         duration:
           enable_day: false
 
+    # --- OPZIONI DI SPEGNIMENTO ---
+    # Raggruppamento visivo per chiarezza
+
     enable_night_off:
-      name: 🌙 Abilita Spegnimento Notturno Programmato
+      name: 🌙 Abilita Spegnimento Notturno
       description: Se attivo, le luci si spegneranno all'orario specificato sotto.
       default: true
       selector:
@@ -73,7 +76,7 @@ blueprint:
 
     night_off_time:
       name: ⏰ Orario Spegnimento Notturno
-      description: Orario in cui spegnere le luci (se l'opzione sopra è attiva).
+      description: Orario in cui spegnere le luci (se l'opzione "Abilita Spegnimento Notturno" è attiva).
       default: "23:30:00"
       selector:
         time: {}
@@ -87,10 +90,12 @@ blueprint:
 
     sunrise_offset:
       name: ⏱️ Offset Spegnimento Alba
-      description: "Quanto tempo prima (-) o dopo (+) l'alba spegnere le luci."
+      description: "Quanto tempo prima (-) o dopo (+) l'alba spegnere le luci (se l'opzione 'Abilita Spegnimento all'Alba' è attiva)."
       default: "00:15:00"
       selector:
         duration: {}
+
+    # --- FINE OPZIONI DI SPEGNIMENTO ---
 
     weekday_only:
       name: 📅 Solo Giorni Feriali
@@ -213,18 +218,13 @@ action:
             data:
               brightness_pct: "{{ final_base_brightness }}"
               transition: 10
-          - service: logbook.log
-            data:
-              name: "⏱️ Persona non più rilevata"
-              message: "Ripristinata luminosità a {{ final_base_brightness }}%"
-
       # SPEGNIMENTO NOTTURNO
       - conditions:
           - condition: trigger
             id: night_off_trigger
+        sequence:
           - condition: template
             value_template: "{{ enable_night_off }}"
-        sequence:
           - service: light.turn_off
             target: !input garden_lights
             data:
@@ -238,12 +238,17 @@ action:
       - conditions:
           - condition: trigger
             id: sunrise_off_trigger
+        sequence:
           - condition: template
             value_template: "{{ enable_sunrise_off }}"
-        sequence:
           - service: light.turn_off
             target: !input garden_lights
             data:
+              transition: 30
+          - service: logbook.log
+            data:
+              name: "🌅 Spegnimento Alba"
+              message: "Luci spente all'alba."
               transition: 30
           - service: logbook.log
             data:
