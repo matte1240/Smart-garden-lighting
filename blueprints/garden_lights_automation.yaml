@@ -1,5 +1,5 @@
 blueprint:
-  name: 🌅 Luci Giardino Intelligenti (corretto)
+  name: 🌅 Luci Giardino Intelligenti (ottimizzato)
   description: >
     Blueprint migliorato per la gestione automatica delle luci del giardino.
     Optional motion sensor, controllo per giorni lavorativi, boost meteo e
@@ -87,16 +87,15 @@ blueprint:
 
 variables:
   motion_entity: !input motion_sensor
-  has_motion_sensor: "{{ motion_entity not in [None, '', 'unknown'] }}"
+  has_motion_sensor: "{{ motion_entity not in [none, '', 'unknown'] }}"
   weekday_only: !input weekday_only
   is_weekday: "{{ now().weekday() < 5 }}"
-  should_run: "{{ (not weekday_only) or is_weekday }}"
+  should_run: "{{ not weekday_only or is_weekday }}"
   base_brightness_in: !input base_brightness
   weather_boost_enabled: !input enable_weather_boost
-  # safe weather state retrieval
-  weather_state: "{{ states('weather.home') | default('unknown') }}"
+  weather_state: "{{ states('weather.home') | default('unknown', true) }}"
   final_base_brightness: >
-    {% set b = base_brightness_in | int %}
+    {% set b = base_brightness_in | int(0) %}
     {% if weather_boost_enabled and weather_state in ['rainy','snowy','fog','cloudy','rain'] %}
       {{ [b + 20, 100] | min }}
     {% else %}
@@ -110,15 +109,13 @@ trigger:
     below: !input sun_elevation
     id: sunset_trigger
 
-  # movimento: attivato solo se fornito (se non fornito ignoreremo azioni via condizioni)
-  - platform: state
-    entity_id: !input motion_sensor
-    to: 'on'
+  # Trigger di movimento basato su template per gestire il sensore opzionale
+  - platform: template
+    value_template: "{{ has_motion_sensor and is_state(motion_entity, 'on') }}"
     id: motion_on_trigger
 
-  - platform: state
-    entity_id: !input motion_sensor
-    to: 'off'
+  - platform: template
+    value_template: "{{ has_motion_sensor and is_state(motion_entity, 'off') }}"
     for: !input motion_duration
     id: motion_off_trigger
 
@@ -132,15 +129,20 @@ trigger:
 
 condition:
   - condition: template
-    # controllo centrale: rispetta l'opzione giorni lavorativi
     value_template: "{{ should_run }}"
 
 action:
   - choose:
-      # TRAMONTO: accendi con luminosità base
+      # TRAMONTO / CONTROLLO MATTUTINO
       - conditions:
           - condition: trigger
-            id: sunset_trigger
+            id:
+              - sunset_trigger
+              - morning_check_trigger
+          - condition: numeric_state
+            entity_id: sun.sun
+            attribute: elevation
+            below: !input sun_elevation
         sequence:
           - service: light.turn_on
             target: !input garden_lights
@@ -150,15 +152,13 @@ action:
           - service: logbook.log
             data:
               name: "🌅 Luci Giardino"
-              message: "Accese al tramonto — {{ final_base_brightness }}%"
+              message: "Accese ({{ trigger.id }}) — Luminosità: {{ final_base_brightness }}%"
 
-      # MOVIMENTO: aumenta luminosità (solo se sensore configurato e buio)
+      # MOVIMENTO RILEVATO
       - conditions:
-          - condition: template
-            value_template: "{{ has_motion_sensor }}"
           - condition: trigger
             id: motion_on_trigger
-          - condition: numeric_state
+          - condition: numeric_state # Controllo ridondante ma sicuro
             entity_id: sun.sun
             attribute: elevation
             below: !input sun_elevation
@@ -173,10 +173,8 @@ action:
               name: "🚶 Movimento"
               message: "Luminosità aumentata a {{ !input motion_brightness }}%"
 
-      # FINE MOVIMENTO: ritorna a base (solo se sensore configurato)
+      # FINE MOVIMENTO
       - conditions:
-          - condition: template
-            value_template: "{{ has_motion_sensor }}"
           - condition: trigger
             id: motion_off_trigger
           - condition: numeric_state
@@ -194,7 +192,7 @@ action:
               name: "⏱️ Movimento Terminato"
               message: "Ripristinata luminosità a {{ final_base_brightness }}%"
 
-      # SPEGNIMENTO NOTTURNO programmato
+      # SPEGNIMENTO NOTTURNO
       - conditions:
           - condition: trigger
             id: night_off_trigger
@@ -206,28 +204,8 @@ action:
           - service: logbook.log
             data:
               name: "🌙 Spegnimento Notturno"
-              message: "Luci spente alle {{ !input night_off_time }}"
-
-      # CONTROLLO MATTUTINO alle 06:00 (riaccendi se ancora buio)
-      - conditions:
-          - condition: trigger
-            id: morning_check_trigger
-          - condition: numeric_state
-            entity_id: sun.sun
-            attribute: elevation
-            below: !input sun_elevation
-        sequence:
-          - service: light.turn_on
-            target: !input garden_lights
-            data:
-              brightness_pct: "{{ final_base_brightness }}"
-              transition: 30
-          - service: logbook.log
-            data:
-              name: "🌅 Controllo Mattutino"
-              message: "Luci riaccese alle 06:00 — ancora buio ({{ final_base_brightness }}%)"
-    # Se nessun trigger corrisponde, non viene eseguita nessuna azione.
-    # Questo è il comportamento atteso.
+              message: "Luci spente come da programma ({{ !input night_off_time }})"
     default: []
 
 mode: restart
+max_exceeded: silent
