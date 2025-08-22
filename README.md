@@ -21,7 +21,7 @@ Un blueprint avanzato per Home Assistant che gestisce automaticamente l'illumina
 ### Metodo 1: Import diretto
 1. Copia l'URL del blueprint: 
    ```
-   https://github.com/[il-tuo-username]/ha-garden-lights-blueprint/blob/main/garden_lights_automation.yaml
+   https://github.com/matte1240/ha-garden-lights-blueprint/blob/main/garden_lights_automation.yaml
    ```
 2. Vai in Home Assistant → Impostazioni → Automazioni e Scene → Blueprint
 3. Clicca su "Importa Blueprint" e incolla l'URL
